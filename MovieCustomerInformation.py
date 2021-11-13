@@ -70,7 +70,7 @@ def display_movies_customer_rated_lower_than(df, customer_id, max_rating=4):
 
 def get_users_loved_hated_movies(df, customer_id, minmax_rating):
     users_ratings_higher_than_four = get_movies_customer_rated_higher_than(df=df, customer_id=customer_id, min_rating=minmax_rating)
-    users_ratings_lower_than_four = get_movies_customer_rated_lower_than(dfdf=df, customer_id=customer_id, max_rating=minmax_rating)
+    users_ratings_lower_than_four = get_movies_customer_rated_lower_than(df=df, customer_id=customer_id, max_rating=minmax_rating)
     print("User", customer_id ,"loved these movies")
     for rating in users_ratings_higher_than_four['movie_title']:
         print(rating)
