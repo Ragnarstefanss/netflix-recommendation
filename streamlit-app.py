@@ -7,26 +7,22 @@ from surprise import Reader, Dataset, SVD
 from surprise.model_selection import cross_validate
 import pickle
 import streamlit as st
+import NetflixLoadData as NetflixLoadData
+import MovieCustomerInformation as information
+max_rating = 4
+min_rating = 4
 #sns.set_style("darkgrid")
 
-pickle_file = open("pickle/small_movies_customers_ratings.pickle", "rb")
-data = pd.DataFrame(pickle.load(pickle_file), columns=['movie_id', 'customer_id', 'rating', 'index']).drop(['index'], axis=1)
-data = data[:10000]
-data['movie_id'] = data['movie_id'].astype(int)
-data['customer_id'] = data['customer_id'].astype(int)
-data["rating"] = data["rating"].astype(int)
-
-df_movies = pd.read_csv('./data/movie_titles.csv', header = None, names = ['movie_id', 'movie_year', 'movie_title'], usecols = [0,1,2], encoding="latin1")
-data_rating_and_movie = data.merge(df_movies, on="movie_id", how="inner")
-
+data_movies, data_rating, data_rating_plus_movie_title, _ = NetflixLoadData.get_data_files(use_small_dataset=True)
 
 st.title('Netflix recommendation')
 #st.write(data_rating_and_movie)
-option = st.selectbox(
- 'Pick a user',
-(1488844, 822109, 30878))
-st.write('You selected:', option)
-#print(data_rating_and_movie)
-display_data = data_rating_and_movie[data_rating_and_movie['customer_id'] == option]
-#print(display_data)
-st.dataframe(display_data)
+customer_id = st.selectbox('Pick a user',(532439, 588344, 596533, 609556, 607980))
+
+st.write('You selected customer:', customer_id)
+st.dataframe(information.all_id_rows(df=data_rating_plus_movie_title, type="customer_id", item_id=customer_id))
+
+customer_movie_rated_count = information.customer_average_ratings(df=data_rating, type='customer_id', customer_id=customer_id)['rating']['count'].values[0]
+customer_movie_avg_rating = round(information.customer_average_ratings(df=data_rating, type='customer_id', customer_id=customer_id)['avg_rating'].values[0], 2)
+
+st.write("His average rating is", customer_movie_avg_rating, "from a total of", customer_movie_rated_count, "movies/tv shows")

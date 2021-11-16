@@ -27,6 +27,11 @@ def all_average_ratings(df, type='movie_id'):
     ratings_stats['avg_rating'] =  ratings_stats['rating']['sum'] / ratings_stats['rating']['count']
     return ratings_stats
 
+def customer_average_ratings(df, type='customer_id', customer_id=0):
+    ratings_stats = df[df[type]==customer_id].groupby(type).agg({'rating': ['sum', 'count']}).reset_index()
+    ratings_stats['avg_rating'] =  ratings_stats['rating']['sum'] / ratings_stats['rating']['count']
+    return ratings_stats
+
 def all_get_rated_count(df, type):
     return df.groupby(type).agg({'movie_id': 'count'}).reset_index()
 
