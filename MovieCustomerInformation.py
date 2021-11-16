@@ -17,6 +17,7 @@ from collections import defaultdict
 from operator import itemgetter
 import NetflixLoadData as NetflixLoadData
 #sns.set_style("darkgrid")
+data_movies, data_rating, data_rating_plus_movie_title, _ = NetflixLoadData.get_data_files(use_small_dataset=True)
 
 def all_id_rows(df, type, item_id):
     return df[df[type] == item_id]
@@ -78,4 +79,13 @@ def get_users_loved_hated_movies(df, customer_id, minmax_rating):
     print("and disliked these movies")
     for rating in users_ratings_lower_than_four['movie_title']:
         print(rating)
-        
+
+def get_customers_who_rated_movie_title(df=data_rating_plus_movie_title, movie_title=""):
+    return df[df["movie_title"] == movie_title]
+
+def get_avg_rating_for_movie_title(df=data_movies, movie_title=""):
+    tmp_data_movies = df[df["movie_title"] == movie_title]
+    tmp_movie_id = tmp_data_movies['movie_id'].values[0]
+    tmp_data_movies.columns = pd.MultiIndex.from_product([['movie_id'], tmp_data_movies.columns])
+    all_movies_average_rating = all_average_ratings(df=data_rating, type='movie_id')
+    return get_item_avg_rating(df=all_movies_average_rating , type='movie_id', item_id=tmp_movie_id).join(tmp_data_movies)

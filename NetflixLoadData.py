@@ -86,13 +86,52 @@ def get_dataframes(use_pickle=True):
     #data_movies_categorize
     data_movies_categorize_cleaned = data_movies_categorize[pd.to_numeric(data_movies_categorize['movie_year'], errors='coerce').notnull()]
     data_movies_categorize_cleaned["movie_year"] = data_movies_categorize_cleaned["movie_year"].astype(float)
-    
-    
     return data_movies, data_rating, data_rating_plus_movie_title, data_movies_categorize_cleaned
 
 def get_sample_of_data(df1, df2, max_n=100000):
     # set max_n as something other than 0 if you want to only get part of the results (for quicker access)
     _df1 = df1[:max_n]
     _df2 = df2[:max_n]
-
     return _df1, _df2 
+
+def get_data_files(use_small_dataset=True):
+    if(use_small_dataset):
+        data_rating = pd.read_csv('./data/smaller_netflix_ratings_cleaned.csv', sep=',')
+        data_rating_plus_movie_title = pd.read_csv('./data/smaller_netflix_ratings_plus_movie_title_cleaned.csv', sep=',')
+    else:
+        data_rating = pd.read_csv('./data/netflix_ratings_cleaned.csv', sep=',')
+        data_rating_plus_movie_title = pd.read_csv('./data/netflix_ratings_plus_movie_title_cleaned.csv', sep=',')
+    
+    movies = pd.read_csv('./data/movie_titles.csv', header = None, names = ['movie_id', 'movie_year', 'movie_title'], usecols = [0,1,2], encoding="latin1")
+    other_movies_categorize = pd.read_csv('./data/netflix_movies_categorized_cleaned.csv', sep=',')
+    return movies, data_rating, data_rating_plus_movie_title, other_movies_categorize
+
+def commented_implementation():
+    print("This part was a huge problem for me since the original files where weirdly structured")
+    print("For example the ratings file was structured with the movie_id randomly being placed in a line and each line after that was refering to that movie without having the id in their line, then another movie randomly started in a line and lines after that were a reference to that movie")
+    print("\nHow it looked before:")
+    print("1:\n 1488844, 3, 2005-09-06 \n 822109, 5, 2005-05-13 \n 885013, 4, 2005-10-19 \n 30878, 4, 2005-12-26 \n....\n....\n...\n")
+    print("2:\n 2059652, 4, 2005-09-05 \n 1666394, 3, 2005-04-19 \n 1759415, 4, 2005-04-22 \n 1959936, 5, 2005-11-21 \n....\n....\n...\n")
+    print("the way I fixed this was include everything in a dataframe and if there was a missing rating then that was a movie_id other wise it was a customer rating, then I combined all these rows to those ratingsm so each movie had a correct reference")
+
+def commented_code_that_was_used_before():
+    ##data_movies, tmp_data_rating, tmp_data_rating_plus_movie_title, data_movies_categorized = NetflixLoadData.get_dataframes(use_pickle=use_pickle_file)
+    ## save to csv file so we don't have to run everything again
+    #tmp_data_rating.to_csv('data/netflix_ratings_cleaned.csv', index=False, sep=',')
+    #tmp_data_rating_plus_movie_title.to_csv('data/netflix_ratings_plus_movie_title_cleaned.csv', index=False, sep=',')
+    #data_movies_categorized.to_csv('data/netflix_movies_categorized_cleaned.csv', index=False, sep=',')
+
+    ## get a smaller dataset then above (which is the entire dataset)
+    #data_rating, data_rating_plus_movie_title = NetflixLoadData.get_sample_of_data(tmp_data_rating, tmp_data_rating_plus_movie_title, max_n=max_n)
+
+
+    # data_rating = tmp_data_rating
+    # unique_users = np.unique(data_rating['customer_id'][0:5000])
+    # small_rating_dataset = data_rating[data_rating['customer_id'].isin(unique_users)]
+    ## save the 800 thousand rows to file
+    # small_rating_dataset.to_csv('data/smaller_netflix_ratings_cleaned.csv', index=False, sep=',')
+
+    #data_rating_plus_movie_title = tmp_data_rating_plus_movie_title
+    #small_rating_plus_movies_dataset = data_rating_plus_movie_title[data_rating_plus_movie_title['customer_id'].isin(unique_users)]
+    #small_rating_plus_movies_dataset.to_csv('data/smaller_netflix_ratings_plus_movie_title_cleaned.csv', index=False, sep=',')
+    print("")
