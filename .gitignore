@@ -6,3 +6,4 @@ pickle/
 before pull/
 __pycache__/
 ml-latest-small/
+data/.DS_Store
