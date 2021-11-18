@@ -4,22 +4,21 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from surprise import Reader, Dataset, SVD, accuracy, dataset
+from surprise import Reader, Dataset, SVD, accuracy, dataset, KNNBasic
 from surprise.model_selection import train_test_split, LeaveOneOut, cross_validate
 import pickle
 import streamlit as st
 import NetflixLoadData as NetflixLoadData
 import MovieCustomerInformation as information
+import heapq
+from collections import defaultdict
+from random import *
+from operator import itemgetter
 
 max_rating = 4
 min_rating = 4
 reader = Reader(line_format='user item rating', rating_scale=(1, 5))
 
-## Convert down to raw ratings
-class convert_to_raw_ratings(dataset.DatasetAutoFolds):
-    def __init__(self, df, reader):
-        self.raw_ratings = [(uid, iid, r, None) for (uid, iid, r) in zip(df['customer_id'], df['movie_id'], df['rating'])]
-        self.reader=reader
 
 def load_pickle(name):
     path_name = "pickle/"+name+".pickle"
@@ -112,19 +111,82 @@ def get_user_stats(customer_id):
     col2.metric(label="AVG Rating", value=customer_movie_avg_rating, delta=avg_rating_delta_string)
     col3.metric(label="AVG Year Movie Ratings", value="86%", delta="xx%  compared to average")
 
+# algorithms to call
+def getMovieName(movieID, tmp_data_movies):
+    if int(movieID) in tmp_data_movies:
+        return tmp_data_movies[int(movieID)]
+    else:
+        return ""
 
-def call_algo():
-    trainSet = load_pickle("algo_trainSet")
-    testSet = load_pickle("algo_testSet")
-    algo = load_pickle("algo_svd")
-    st.dataframe(return_recommendation(customer_id=customer_id, number_to_show=9, predictor=algo))
-    algo_predictions = algo.test(testSet)
-    print_evaluation_accuracy(algo_predictions)
+def create_dict_movieid_movie_title(df):
+    tmp_data_movies = df[['movie_id', 'movie_title']]
+    tmp_data_movies = tmp_data_movies.set_index('movie_id').T
+    tmp_data_movies = tmp_data_movies.to_dict('list')
+    tmp_data_movies = {k: str(v[0]) for k,v in tmp_data_movies.items()}
+    return tmp_data_movies
+
+def get_watched(test_subject_iid):
+    watched = {}
+    for itemID, rating in trainSet.ur[test_subject_iid]:
+        watched[itemID] = 1
+    return watched
+
+def get_candidates(k_neighbours, similarity_matrix):
+    candidates = defaultdict(float)
+    for itemID, rating in k_neighbours:
+        try:
+            similarities = similarity_matrix[itemID]
+            for innerID, score in enumerate(similarities):
+                candidates[innerID] += score * (rating / 5.0)
+        except:
+            continue
+    return candidates
+
+def get_recommendations(candidates, watched):
+    recommendations = []
+    position = 0
+    tmp_data_movies = create_dict_movieid_movie_title(df=data_movies)
+    for itemID, rating_sum in sorted(candidates.items(), key=itemgetter(1), reverse=True):
+        if not itemID in watched:
+            recommendations.append(getMovieName(trainSet.to_raw_iid(itemID), tmp_data_movies))
+            position += 1
+            # only want top n which in our case in 10
+            if(position > 10): break
+    return recommendations
+
+
+def call_algorithm_KNNBasic(algorithm=KNNBasic, n_recommendations=10, user_based=False):
+    # creating a dict of movie id and movie_title to make sure we don't recommend user something he has rated before
+    similarity_matrix = KNNBasic(sim_options={'name': 'cosine', 'user_based': user_based}).fit(fullTrainset).compute_similarities()
+    test_subject_iid = trainSet.to_inner_uid(customer_id)
+    test_subject_ratings = trainSet.ur[test_subject_iid]
+    k_neighbours = heapq.nlargest(n_recommendations, test_subject_ratings, key=lambda t: t[1])
+    
+    candidates = get_candidates(k_neighbours, similarity_matrix)
+    print("candidates" , candidates)
+    watched = get_watched(test_subject_iid)
+    recommendations = get_recommendations(candidates, watched)
+    st.dataframe(recommendations)
+    #show_recommendations(recommendations)
+
+def call_algorithm_svd(algorithm=SVD, n_recommendations=10):
+    ## takes a long time to run while in development we do this step with pickle file
+    #algo = algorithm(random_state=10)
+    #algo.fit(trainSet)
+    #if(algorithm == SVD):
+    model = load_pickle("algorithm_svd")
+    predictions = model.test(testSet)
+    recommendation_out = return_recommendation(customer_id, n_recommendations, model)
+    st.dataframe(recommendation_out)
+    print_evaluation_accuracy(predictions)
 
 
 data_movies, data_rating, data_rating_plus_movie_title, _ = NetflixLoadData.get_data_files(use_small_dataset=True)
+
 dataset = Dataset.load_from_df(data_rating[['customer_id', 'movie_id', 'rating']], reader)
-trainset = dataset.build_full_trainset()
+fullTrainset = dataset.build_full_trainset()
+trainSet, testSet = train_test_split(dataset, test_size=.25, random_state=1)
+
 
 
 st.title('Netflix recommendation')
@@ -142,12 +204,13 @@ st.dataframe(customers_all_ratings)
 
 write_subheader("Recommended movies to user")
 print("\nBuilding recommendation model...")
-genre = st.selectbox("Pick model", ('algo', 'svd', 'big'))
 
-if(genre == "algo"):
-    call_algo()
+genre = st.selectbox("Pick model", ('svd', 'KNNBasic', 'big'))
+number_of_movies_to_recommend = 9
 if(genre == "svd"):
-    call_alternative()
+    call_algorithm_svd(algorithm=SVD, n_recommendations=number_of_movies_to_recommend)
+if(genre == "KNNBasic"):
+    call_algorithm_KNNBasic(algorithm=KNNBasic, n_recommendations=number_of_movies_to_recommend)
 
 
 #0 : 1452669
