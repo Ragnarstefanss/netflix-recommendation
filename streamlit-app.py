@@ -100,7 +100,7 @@ def get_user_stats(customer_id):
     all_customers_average_ratings =  information.all_average_ratings(df=data_rating, type='customer_id')["avg_rating"].mean()
     avg_rating_change = ((customer_movie_avg_rating - all_customers_average_ratings) / all_customers_average_ratings)*100
     avg_rating_delta = round(avg_rating_change, 2)
-    avg_rating_delta_string = str(avg_rating_delta)+"% (avg is " + str(round(all_customers_average_ratings)) + ")"
+    avg_rating_delta_string = str(avg_rating_delta)+"% (avg is " + str(round(all_customers_average_ratings, 2)) + ")"
 
     # write to website
     st.markdown('#')
@@ -222,16 +222,20 @@ dataset = Dataset.load_from_df(data_rating[['customer_id', 'movie_id', 'rating']
 fullTrainset = dataset.build_full_trainset()
 trainSet, testSet = train_test_split(dataset, test_size=.25, random_state=1)
 
+total_users_using = len(data_rating["customer_id"].unique())
+total_movies_using = len(information.all_average_ratings(df=data_rating, type='movie_id')['movie_id'])
+total_movies = len(data_movies["movie_id"].unique())
+percentage_using_movies = (total_movies_using / total_movies)*100
 
 
 st.title('Netflix recommendation')
 #st.write(data_rating_and_movie)
 
-streamlit_type_to_show = st.radio("Change view", ("customer based", "summary"))
+streamlit_type_to_show = st.radio("Change view", ("customer based", "summary", "random movie/tv"))
 
 if(streamlit_type_to_show == "customer based"):
 
-    customer_id = st.selectbox('Pick a user',(532439, 588344, 596533, 609556, 607980))
+    customer_id = st.selectbox('Pick a user',(532439, 588344, 596533, 609556, 607980, 305344))
     customers_all_ratings = information.all_id_rows(df=data_rating_plus_movie_title, type="customer_id", item_id=customer_id)
     customer_movie_rated_count = information.customer_average_ratings(df=data_rating, type='customer_id', customer_id=customer_id)['rating']['count'].values[0]
     customer_movie_avg_rating = round(information.customer_average_ratings(df=data_rating, type='customer_id', customer_id=customer_id)['avg_rating'].values[0], 2)
@@ -274,10 +278,22 @@ if(streamlit_type_to_show == "customer based"):
 
 if(streamlit_type_to_show == "summary"):
     max_rating = 4
+    ## write to website
+    number_of_customers =  len(data_rating["customer_id"].unique())
+    number_of_movies = len(information.all_average_ratings(df=data_rating, type='movie_id')['movie_id'])
+    percentage_using_movies_random = str(round(percentage_using_movies, 2))+"%"
+    number_of_movies_value_string = str(total_movies_using)+" out of "+ str(total_movies)
+
+    st.markdown('#')
+    col1, col2 = st.columns(2)
+    col1.metric(label="Number of users chosen", value=total_users_using)#, delta="4")
+    col2.metric(label="Number of movies rated", value=number_of_movies_value_string)#, delta=percentage_using_movies_random)
+    #col3.metric(label="AVG Year Movie Ratings", value="86%")#, delta="xx%  compared to average")
+
     # get the average movie rating for all customers
     # used to determine if this user typically gives bad or good reviews
     # and then we can see if he really hates or loves a movie
-    write_subheader("Customer average movie rating")
+    write_subheader("Customers average movie rating")
     all_customers_average_ratings =  information.all_average_ratings(df=data_rating, type='customer_id')
     st.dataframe(all_customers_average_ratings)
     
@@ -285,15 +301,33 @@ if(streamlit_type_to_show == "summary"):
     all_movies_average_rating = information.all_average_ratings(df=data_rating, type='movie_id')
     st.write(all_movies_average_rating)
 
-    write_subheader("Low rating (< 4)")
-    st.write(information.get_avg_rating_less_than(df=all_customers_average_ratings , max_rating=max_rating))
+    write_subheader("Customer low ratings (< "+str(max_rating)+")")
+    customer_ratings_low = information.get_avg_rating_less_than(df=all_customers_average_ratings , max_rating=max_rating)
+    st.write(customer_ratings_low)
 
-    write_subheader("High rating (>= 4)")
-    st.write(information.get_avg_rating_higher_than(df=all_customers_average_ratings, min_rating=min_rating))
-#0 : 1452669
-#1 : 4227
-#2 : 2
-#algo_predictions
-#+
-#3: 2.4164138660128724
-#4 : {"was_impossible": false}
+    write_subheader("Customer high ratings (>= "+str(min_rating)+")")
+    customer_ratings_high = information.get_avg_rating_higher_than(df=all_customers_average_ratings, min_rating=min_rating)
+    st.write(customer_ratings_high)
+
+    customers_low_high_ratings_percentage = ((len(customer_ratings_high)-len(customer_ratings_low)) / len(customer_ratings_low))*100
+    if(customers_low_high_ratings_percentage <= 0):
+       rating_string = str("high rating dataframe is "+str(round(customers_low_high_ratings_percentage, 2))+"% smaller than low rating dataframe (high = " + str(len(customer_ratings_high)) + " rows,  low= " + str(len(customer_ratings_low))+ " rows)")
+       st.info(rating_string)
+
+    if(customers_low_high_ratings_percentage > 0):
+        rating_string = str("high rating dataframe is "+str(round(customers_low_high_ratings_percentage, 2))+"% bigger than low rating dataframe (high = " + str(len(customer_ratings_high)) + " rows,  low= " + str(len(customer_ratings_low))+ " rows)")
+        st.info(rating_string)
+
+if(streamlit_type_to_show == "random movie/tv"):
+    for i in range(0,2):
+        movie_to_find = data_movies['movie_title'][randrange(1000)]
+        customers_who_rated_random_movie = information.get_customers_who_rated_movie_title(movie_title=movie_to_find)
+        write_subheader("People who rated "+str(movie_to_find))
+        percentage_using_movies_random = str(round(percentage_using_movies, 2))+"%"
+        st.markdown('#')
+        col1, col2 = st.columns(2)
+        col1.metric(label="Number of users rated", value="Y", delta="X")
+        col2.metric(label="AVG Year Movie Ratings", value="86%")#, delta="xx%  compared to average")
+
+        st.dataframe(customers_who_rated_random_movie)
+        st.write("====== SIMILAR MOVIES HERE =======")
