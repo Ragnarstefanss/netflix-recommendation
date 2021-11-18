@@ -36,11 +36,10 @@ def all_get_rated_count(df, type):
     return df.groupby(type).agg({'movie_id': 'count'}).reset_index()
 
 def get_avg_rating_less_than(df, max_rating):
-    print(df[df['avg_rating'] < max_rating])
-
+    return df[df['avg_rating'] < max_rating]
 
 def get_avg_rating_higher_than(df, min_rating):
-    print(df[df['avg_rating'] > min_rating])
+    return df[df['avg_rating'] > min_rating]
 
 def get_item_avg_rating(df, type, item_id):
     return df[df[type] == item_id]

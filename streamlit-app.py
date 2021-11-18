@@ -84,7 +84,6 @@ def print_evaluation_accuracy(prediction):
     st.write("FCP: ", accuracy.mae(prediction, verbose=False))
 
 # streamlit functions
-
 def write_subheader(title):
     st.markdown('#')
     st.subheader(title)
@@ -103,7 +102,6 @@ def get_user_stats(customer_id):
     avg_rating_delta = round(avg_rating_change, 2)
     avg_rating_delta_string = str(avg_rating_delta)+"% (avg is " + str(round(all_customers_average_ratings)) + ")"
 
-   
     # write to website
     st.markdown('#')
     col1, col2, col3 = st.columns(3)
@@ -111,7 +109,7 @@ def get_user_stats(customer_id):
     col2.metric(label="AVG Rating", value=customer_movie_avg_rating, delta=avg_rating_delta_string)
     col3.metric(label="AVG Year Movie Ratings", value="86%", delta="xx%  compared to average")
 
-# algorithms to call
+## algorithms helper functions
 def getMovieName(movieID, tmp_data_movies):
     if int(movieID) in tmp_data_movies:
         return tmp_data_movies[int(movieID)]
@@ -154,21 +152,7 @@ def get_recommendations(candidates, watched):
             if(position > 10): break
     return recommendations
 
-
-def call_algorithm_KNNBasic(algorithm=KNNBasic, n_recommendations=10, user_based=False):
-    # creating a dict of movie id and movie_title to make sure we don't recommend user something he has rated before
-    similarity_matrix = KNNBasic(sim_options={'name': 'cosine', 'user_based': user_based}).fit(fullTrainset).compute_similarities()
-    test_subject_iid = trainSet.to_inner_uid(customer_id)
-    test_subject_ratings = trainSet.ur[test_subject_iid]
-    k_neighbours = heapq.nlargest(n_recommendations, test_subject_ratings, key=lambda t: t[1])
-    
-    candidates = get_candidates(k_neighbours, similarity_matrix)
-    print("candidates" , candidates)
-    watched = get_watched(test_subject_iid)
-    recommendations = get_recommendations(candidates, watched)
-    st.dataframe(recommendations)
-    #show_recommendations(recommendations)
-
+## call these algorithms
 def call_algorithm_svd(algorithm=SVD, n_recommendations=10):
     ## takes a long time to run while in development we do this step with pickle file
     #algo = algorithm(random_state=10)
@@ -180,6 +164,57 @@ def call_algorithm_svd(algorithm=SVD, n_recommendations=10):
     st.dataframe(recommendation_out)
     print_evaluation_accuracy(predictions)
 
+def call_algorithm_KNNBasic(algorithm=KNNBasic, n_recommendations=10, user_based=False):
+    # creating a dict of movie id and movie_title to make sure we don't recommend user something he has rated before
+    #similarity_matrix = KNNBasic(sim_options={'name': 'cosine', 'user_based': user_based}).fit(fullTrainset).compute_similarities()
+    similarity_matrix = load_pickle("knnbasic_similarity_matrix")
+    test_subject_iid = trainSet.to_inner_uid(customer_id)
+    test_subject_ratings = trainSet.ur[test_subject_iid]
+    k_neighbours = heapq.nlargest(n_recommendations, test_subject_ratings, key=lambda t: t[1])
+    
+    candidates = get_candidates(k_neighbours, similarity_matrix)
+    #print("candidates" , candidates)
+    watched = get_watched(test_subject_iid)
+    recommendations = get_recommendations(candidates, watched)
+    st.dataframe(recommendations)
+    #show_recommendations(recommendations)
+
+def call_leave_one_out(algorithm=KNNBasic, n_recommendations=10, user_based=False):
+    # creating a dict of movie id and movie_title to make sure we don't recommend user something he has rated before
+    # ALTERNATIVE: sim_options = {'name': 'pearson_baseline', 'user_based': False}
+    #similarity_matrix = KNNBasic(sim_options={'name': 'cosine', 'user_based': user_based}).fit(fullTrainset).compute_similarities()
+    similarity_matrix = load_pickle("knnbasic_similarity_matrix")
+    model = load_pickle("algorithm_svd")
+    model.fit(trainSet)
+    predictions = model.test(testSet)
+    print_evaluation_accuracy(predictions)
+
+    print("\n Running through the top-10 recommendations now")
+    leave_one_out_cv = LeaveOneOut(n_splits=1, random_state=1)
+    for train, test in leave_one_out_cv.split(dataset):
+        print("For loop for leave one out")
+        model.fit(train)
+
+        print("predicting ratings for one item being taken out of set (leave one out)")
+        leftout_prediction = model.test(test)
+
+        print("Making predictions on data that does not exist in the training set")
+        set_of_test = train.build_anti_testset()
+        allPredictions = model.test(set_of_test)
+        
+        print("working on computing top 10 recommendations for each user")
+        topNPredict = accuracy.GetTopN(allPredictions, n=10)
+
+        print("hit rate", accuracy.HitRate(topNPredict, leftout_prediction))
+        print("hit rate based on ratings")
+        accuracy.RatingHitRate(topNPredict, leftout_prediction)
+
+        print("movies we recommended which the customer has shown he liked >= 4 rating", accuracy.CumulativeHitRate(topNPredict, leftout_prediction, 4.0))
+        print('Average ReciprocalHitRank ', accuracy.AverageReciprocalHitRank(topNPredict, ))
+   
+    print("coverage")
+    print("Diversity")
+    print('Novelty')
 
 data_movies, data_rating, data_rating_plus_movie_title, _ = NetflixLoadData.get_data_files(use_small_dataset=True)
 
@@ -191,28 +226,70 @@ trainSet, testSet = train_test_split(dataset, test_size=.25, random_state=1)
 
 st.title('Netflix recommendation')
 #st.write(data_rating_and_movie)
-customer_id = st.selectbox('Pick a user',(532439, 588344, 596533, 609556, 607980))
-customers_all_ratings = information.all_id_rows(df=data_rating_plus_movie_title, type="customer_id", item_id=customer_id)
-customer_movie_rated_count = information.customer_average_ratings(df=data_rating, type='customer_id', customer_id=customer_id)['rating']['count'].values[0]
-customer_movie_avg_rating = round(information.customer_average_ratings(df=data_rating, type='customer_id', customer_id=customer_id)['avg_rating'].values[0], 2)
+
+streamlit_type_to_show = st.radio("Change view", ("customer based", "summary"))
+
+if(streamlit_type_to_show == "customer based"):
+
+    customer_id = st.selectbox('Pick a user',(532439, 588344, 596533, 609556, 607980))
+    customers_all_ratings = information.all_id_rows(df=data_rating_plus_movie_title, type="customer_id", item_id=customer_id)
+    customer_movie_rated_count = information.customer_average_ratings(df=data_rating, type='customer_id', customer_id=customer_id)['rating']['count'].values[0]
+    customer_movie_avg_rating = round(information.customer_average_ratings(df=data_rating, type='customer_id', customer_id=customer_id)['avg_rating'].values[0], 2)
 
 
-get_user_stats(customer_id)
+    get_user_stats(customer_id)
 
-write_subheader("Movies/TV Shows rated by user")
-st.dataframe(customers_all_ratings)
+    write_subheader("Movies/TV Shows rated by user")
+    st.dataframe(customers_all_ratings)
 
-write_subheader("Recommended movies to user")
-print("\nBuilding recommendation model...")
+    write_subheader("Recommended movies to user")
+    print("\nBuilding recommendation model...")
 
-genre = st.selectbox("Pick model", ('svd', 'KNNBasic', 'big'))
-number_of_movies_to_recommend = 9
-if(genre == "svd"):
-    call_algorithm_svd(algorithm=SVD, n_recommendations=number_of_movies_to_recommend)
-if(genre == "KNNBasic"):
-    call_algorithm_KNNBasic(algorithm=KNNBasic, n_recommendations=number_of_movies_to_recommend)
+    genre = st.selectbox("Pick model", ('svd', 'KNNBasic', 'KNNBasic LeaveOneOut'))
+    number_of_movies_to_recommend = 9
 
+    spinner_message = "Creating the secret souce..."
+    error_message = "Ooops! sorry we couldn't load the recommendations, sombody should really fix that" 
 
+    if(genre == "svd"):
+        try:
+            with st.spinner(spinner_message):
+                call_algorithm_svd(algorithm=SVD, n_recommendations=number_of_movies_to_recommend)
+        except:
+            st.error(error_message)
+
+    if(genre == "KNNBasic"):
+        try:
+            with st.spinner(spinner_message):
+                call_algorithm_KNNBasic(algorithm=KNNBasic, n_recommendations=number_of_movies_to_recommend)
+        except:
+            st.error(error_message)
+
+    if(genre == "KNNBasic LeaveOneOut"):
+        try:
+            with st.spinner(spinner_message):
+                call_leave_one_out(algorithm=KNNBasic, n_recommendations=number_of_movies_to_recommend)
+        except:
+            st.error(error_message)
+
+if(streamlit_type_to_show == "summary"):
+    max_rating = 4
+    # get the average movie rating for all customers
+    # used to determine if this user typically gives bad or good reviews
+    # and then we can see if he really hates or loves a movie
+    write_subheader("Customer average movie rating")
+    all_customers_average_ratings =  information.all_average_ratings(df=data_rating, type='customer_id')
+    st.dataframe(all_customers_average_ratings)
+    
+    write_subheader("Movies/TV shows average rating")
+    all_movies_average_rating = information.all_average_ratings(df=data_rating, type='movie_id')
+    st.write(all_movies_average_rating)
+
+    write_subheader("Low rating (< 4)")
+    st.write(information.get_avg_rating_less_than(df=all_customers_average_ratings , max_rating=max_rating))
+
+    write_subheader("High rating (>= 4)")
+    st.write(information.get_avg_rating_higher_than(df=all_customers_average_ratings, min_rating=min_rating))
 #0 : 1452669
 #1 : 4227
 #2 : 2
